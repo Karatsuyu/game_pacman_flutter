@@ -1,9 +1,228 @@
 import 'constants.dart';
+import 'dart:math';
+
+/// ============================================================================
+/// GAME MAP - MAPAS DEL JUEGO CON MÚLTIPLES DISEÑOS
+/// Incluye el mapa clásico y variantes modernas
+/// ============================================================================
 
 class GameMap {
-  // Classic Pac-Man map layout (28x31)
-  // 0=empty, 1=wall, 2=dot, 3=power pellet, 4=ghost door, 5=tunnel
-  static const List<List<int>> originalLayout = [
+  List<List<int>> layout = [];
+  int totalDots = 0;
+  int dotsEaten = 0;
+  int currentMapIndex = 0;
+  
+  // Posiciones de inicio
+  static const double pacmanStartX = 13.5;
+  static const double pacmanStartY = 23.0;
+  
+  static const double blinkyStartX = 13.5;
+  static const double blinkyStartY = 11.0;
+  static const double pinkyStartX = 13.5;
+  static const double pinkyStartY = 14.0;
+  static const double inkyStartX = 11.5;
+  static const double inkyStartY = 14.0;
+  static const double clydeStartX = 15.5;
+  static const double clydeStartY = 14.0;
+  
+  static const double ghostExitX = 13.5;
+  static const double ghostExitY = 11.0;
+  
+  static const int tunnelY = 14;
+  
+  // Objetivos de scatter (esquinas) para los fantasmas
+  static const List<List<int>> scatterTargets = [
+    [25, -3],  // Blinky - superior derecha
+    [2, -3],   // Pinky - superior izquierda
+    [27, 31],  // Inky - inferior derecha
+    [0, 31],   // Clyde - inferior izquierda
+  ];
+  
+  // Lista de mapas disponibles
+  static final List<List<List<int>>> mapDesigns = [
+    // Mapa Clásico (inspirado en el original)
+    _classicMap,
+    // Mapa Moderno - Más abierto
+    _modernMap,
+    // Mapa Laberinto - Más complejo
+    _mazeMap,
+    // Mapa Arena - Centro abierto
+    _arenaMap,
+    // Mapa Velocidad - Pasillos largos
+    _speedMap,
+  ];
+  
+  String get mapName {
+    switch (currentMapIndex) {
+      case 0: return 'CLÁSICO';
+      case 1: return 'MODERNO';
+      case 2: return 'LABERINTO';
+      case 3: return 'ARENA';
+      case 4: return 'VELOCIDAD';
+      default: return 'CLÁSICO';
+    }
+  }
+  
+  static String getMapNameStatic(int index) {
+    switch (index) {
+      case 0: return 'CLÁSICO';
+      case 1: return 'MODERNO';
+      case 2: return 'LABERINTO';
+      case 3: return 'ARENA';
+      case 4: return 'VELOCIDAD';
+      default: return 'CLÁSICO';
+    }
+  }
+  
+  GameMap() {
+    resetMap();
+  }
+  
+  /// Reinicia el mapa actual
+  void resetMap() {
+    if (currentMapIndex >= mapDesigns.length) {
+      currentMapIndex = 0;
+    }
+    
+    var design = mapDesigns[currentMapIndex];
+    layout = design.map((row) => List<int>.from(row)).toList();
+    totalDots = 0;
+    dotsEaten = 0;
+    
+    for (var row in layout) {
+      for (var cell in row) {
+        if (cell == kDot || cell == kPowerPellet || 
+            cell == kSpeedBoost || cell == kFreezeGhost) {
+          totalDots++;
+        }
+      }
+    }
+  }
+  
+  /// Cambia al siguiente diseño de mapa
+  void nextMap() {
+    currentMapIndex = (currentMapIndex + 1) % mapDesigns.length;
+    resetMap();
+  }
+  
+  /// Verifica si una posición es pared
+  bool isWall(int x, int y) {
+    if (y < 0 || y >= kMapHeight) return true;
+    if (x < 0 || x >= kMapWidth) {
+      if (y == tunnelY) return false;
+      return true;
+    }
+    return layout[y][x] == kWall;
+  }
+  
+  /// Verifica si es puerta de fantasmas
+  bool isGhostDoor(int x, int y) {
+    if (x < 0 || x >= kMapWidth || y < 0 || y >= kMapHeight) return false;
+    return layout[y][x] == kGhostDoor;
+  }
+  
+  /// Verifica si se puede mover a una posición
+  bool canMove(int x, int y, {bool isGhost = false, bool isEaten = false}) {
+    if (y < 0 || y >= kMapHeight) return false;
+    if (x < 0 || x >= kMapWidth) {
+      if (y == tunnelY) return true;
+      return false;
+    }
+    int tile = layout[y][x];
+    if (tile == kWall) return false;
+    if (tile == kGhostDoor) return isGhost || isEaten;
+    return true;
+  }
+  
+  /// Come un punto en la posición dada
+  int eatDot(int x, int y) {
+    if (x < 0 || x >= kMapWidth || y < 0 || y >= kMapHeight) return 0;
+    int tile = layout[y][x];
+    
+    if (tile == kDot) {
+      layout[y][x] = kEmpty;
+      dotsEaten++;
+      return kDotPoints;
+    } else if (tile == kPowerPellet) {
+      layout[y][x] = kEmpty;
+      dotsEaten++;
+      return kPowerPelletPoints;
+    } else if (tile == kSpeedBoost) {
+      layout[y][x] = kEmpty;
+      dotsEaten++;
+      return kSpeedBoostPoints;
+    } else if (tile == kFreezeGhost) {
+      layout[y][x] = kEmpty;
+      dotsEaten++;
+      return kFreezeGhostPoints;
+    } else if (tile == kBonusItem) {
+      layout[y][x] = kEmpty;
+      return kBonusItemPoints;
+    }
+    return 0;
+  }
+  
+  /// Verifica si hay un power pellet en la posición
+  bool isPowerPellet(int x, int y) {
+    if (x < 0 || x >= kMapWidth || y < 0 || y >= kMapHeight) return false;
+    return layout[y][x] == kPowerPellet;
+  }
+  
+  /// Verifica si todos los puntos han sido comidos
+  bool allDotsEaten() => dotsEaten >= totalDots;
+  
+  /// Obtiene el porcentaje de completado
+  double get completionPercent => totalDots > 0 ? dotsEaten / totalDots : 0;
+  
+  /// Envuelve la coordenada X (túnel)
+  int wrapX(int x) {
+    if (x < 0) return kMapWidth - 1;
+    if (x >= kMapWidth) return 0;
+    return x;
+  }
+  
+  /// Obtiene los vecinos válidos para un fantasma
+  List<Direction> getValidDirections(int x, int y, Direction currentDir, bool isEaten) {
+    List<Direction> valid = [];
+    Direction reverse = currentDir.opposite;
+    
+    for (var dir in [Direction.up, Direction.down, Direction.left, Direction.right]) {
+      if (dir == reverse) continue;
+      
+      int nx = x + _dirX(dir);
+      int ny = y + _dirY(dir);
+      
+      if (canMove(nx, ny, isGhost: true, isEaten: isEaten)) {
+        valid.add(dir);
+      }
+    }
+    
+    return valid;
+  }
+  
+  int _dirX(Direction dir) {
+    if (dir == Direction.left) return -1;
+    if (dir == Direction.right) return 1;
+    return 0;
+  }
+  
+  int _dirY(Direction dir) {
+    if (dir == Direction.up) return -1;
+    if (dir == Direction.down) return 1;
+    return 0;
+  }
+  
+  /// Obtiene la distancia entre dos puntos (evitando paredes)
+  double getDistance(int x1, int y1, int x2, int y2) {
+    return sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2));
+  }
+  
+  // ==========================================================================
+  // DISEÑOS DE MAPAS
+  // ==========================================================================
+  
+  // Mapa Clásico
+  static const List<List<int>> _classicMap = [
     [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
     [1,2,2,2,2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,2,2,2,1],
     [1,2,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,2,1],
@@ -36,112 +255,144 @@ class GameMap {
     [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
     [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
   ];
-
-  List<List<int>> layout = [];
-  int totalDots = 0;
-  int dotsEaten = 0;
-
-  GameMap() {
-    resetMap();
-  }
-
-  // Pac-Man start position
-  static const double pacmanStartX = 13.5;
-  static const double pacmanStartY = 23.0;
-
-  // Ghost start positions (inside ghost house)
-  static const double blinkyStartX = 13.5;
-  static const double blinkyStartY = 11.0; // Blinky starts outside
-  static const double pinkyStartX = 13.5;
-  static const double pinkyStartY = 14.0;
-  static const double inkyStartX = 11.5;
-  static const double inkyStartY = 14.0;
-  static const double clydeStartX = 15.5;
-  static const double clydeStartY = 14.0;
-
-  // Ghost house exit
-  static const double ghostExitX = 13.5;
-  static const double ghostExitY = 11.0;
-
-  // Ghost scatter targets (corners)
-  static const List<List<int>> scatterTargets = [
-    [25, -3],  // Blinky - top right
-    [2, -3],   // Pinky - top left
-    [27, 31],  // Inky - bottom right
-    [0, 31],   // Clyde - bottom left
+  
+  // Mapa Moderno - Más abierto con áreas de maniobra
+  static const List<List<int>> _modernMap = [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,2,1,1,2,2,2,2,0,0,2,2,2,2,1,1,2,1,1,1,1,2,1],
+    [1,2,1,1,1,1,2,1,1,2,2,2,2,0,0,2,2,2,2,1,1,2,1,1,1,1,3,1],
+    [1,2,2,2,2,2,2,1,1,2,2,2,2,0,0,2,2,2,2,1,1,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,2,1,1,1,1,1,1,0,0,1,1,1,1,1,1,2,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,2,1],
+    [1,2,2,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,2,1,1,1,1,1,0,1,1,0,1,1,1,1,1,2,1,1,1,1,1,1],
+    [0,0,0,0,0,1,2,1,1,1,1,1,0,1,1,0,1,1,1,1,1,2,1,0,0,0,0,0],
+    [0,0,0,0,0,1,2,1,1,0,0,0,0,0,0,0,0,0,0,1,1,2,1,0,0,0,0,0],
+    [0,0,0,0,0,1,2,1,1,0,1,1,1,4,4,1,1,1,0,1,1,2,1,0,0,0,0,0],
+    [1,1,1,1,1,1,2,1,1,0,1,0,0,0,0,0,0,1,0,1,1,2,1,1,1,1,1,1],
+    [5,0,0,0,0,0,2,0,0,0,1,0,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0,5],
+    [1,1,1,1,1,1,2,1,1,0,1,0,0,0,0,0,0,1,0,1,1,2,1,1,1,1,1,1],
+    [0,0,0,0,0,1,2,1,1,0,1,1,1,1,1,1,1,1,0,1,1,2,1,0,0,0,0,0],
+    [0,0,0,0,0,1,2,1,1,0,0,0,0,0,0,0,0,0,0,1,1,2,1,0,0,0,0,0],
+    [0,0,0,0,0,1,2,1,1,0,1,1,1,1,1,1,1,1,0,1,1,2,1,0,0,0,0,0],
+    [1,1,1,1,1,1,2,1,1,0,1,1,1,1,1,1,1,1,0,1,1,2,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,2,1,1,2,2,2,2,0,0,2,2,2,2,1,1,2,1,1,1,1,2,1],
+    [1,3,1,1,1,1,2,1,1,2,2,2,2,0,0,2,2,2,2,1,1,2,1,1,1,1,3,1],
+    [1,2,2,2,1,1,2,2,2,2,2,2,2,0,0,2,2,2,2,2,2,2,1,1,2,2,2,1],
+    [1,1,1,2,1,1,2,1,1,2,1,1,1,1,1,1,1,1,2,1,1,2,1,1,2,1,1,1],
+    [1,1,1,2,1,1,2,1,1,2,1,1,1,1,1,1,1,1,2,1,1,2,1,1,2,1,1,1],
+    [1,2,2,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1],
+    [1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
   ];
-
-  // Tunnel positions
-  static const int tunnelY = 14;
-  static const int tunnelLeftX = 0;
-  static const int tunnelRightX = 27;
-
-  void resetMap() {
-    layout = originalLayout.map((row) => List<int>.from(row)).toList();
-    totalDots = 0;
-    dotsEaten = 0;
-    for (var row in layout) {
-      for (var cell in row) {
-        if (cell == kDot || cell == kPowerPellet) {
-          totalDots++;
-        }
-      }
-    }
-  }
-
-  bool isWall(int x, int y) {
-    if (y < 0 || y >= kMapHeight) return true;
-    // Tunnel wrapping
-    if (x < 0 || x >= kMapWidth) {
-      if (y == tunnelY) return false;
-      return true;
-    }
-    return layout[y][x] == kWall;
-  }
-
-  bool isGhostDoor(int x, int y) {
-    if (x < 0 || x >= kMapWidth || y < 0 || y >= kMapHeight) return false;
-    return layout[y][x] == kGhostDoor;
-  }
-
-  bool canMove(int x, int y, {bool isGhost = false, bool isEaten = false}) {
-    if (y < 0 || y >= kMapHeight) return false;
-    // Tunnel wrapping
-    if (x < 0 || x >= kMapWidth) {
-      if (y == tunnelY) return true;
-      return false;
-    }
-    int tile = layout[y][x];
-    if (tile == kWall) return false;
-    if (tile == kGhostDoor) return isGhost || isEaten;
-    return true;
-  }
-
-  int eatDot(int x, int y) {
-    if (x < 0 || x >= kMapWidth || y < 0 || y >= kMapHeight) return 0;
-    int tile = layout[y][x];
-    if (tile == kDot) {
-      layout[y][x] = kEmpty;
-      dotsEaten++;
-      return kDotPoints;
-    } else if (tile == kPowerPellet) {
-      layout[y][x] = kEmpty;
-      dotsEaten++;
-      return kPowerPelletPoints;
-    }
-    return 0;
-  }
-
-  bool isPowerPellet(int x, int y) {
-    if (x < 0 || x >= kMapWidth || y < 0 || y >= kMapHeight) return false;
-    return layout[y][x] == kPowerPellet;
-  }
-
-  bool allDotsEaten() => dotsEaten >= totalDots;
-
-  int wrapX(int x) {
-    if (x < 0) return kMapWidth - 1;
-    if (x >= kMapWidth) return 0;
-    return x;
-  }
+  
+  // Mapa Laberinto - Más complejo y cerrado
+  static const List<List<int>> _mazeMap = [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,1,2,2,2,1,2,2,2,2,1,1,2,2,2,2,1,2,2,2,1,2,2,2,1],
+    [1,2,1,2,1,2,1,2,1,2,1,1,2,1,1,2,1,1,2,1,2,1,2,1,2,1,2,1],
+    [1,3,1,2,2,2,1,2,2,2,1,1,2,1,1,2,1,1,2,2,2,1,2,2,2,1,3,1],
+    [1,2,1,2,1,2,1,2,1,2,1,1,2,1,1,2,1,1,2,1,2,1,2,1,2,1,2,1],
+    [1,2,2,2,1,2,2,2,1,2,2,2,2,2,2,2,2,2,2,1,2,2,2,1,2,2,2,1],
+    [1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,0,0,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,2,1,1,1,1,1,1,0,0,1,1,1,1,1,1,2,1,1,1,1,2,1],
+    [1,2,2,2,2,1,2,2,2,2,2,2,2,0,0,2,2,2,2,2,2,2,1,2,2,2,2,1],
+    [1,1,1,1,2,1,2,1,1,2,1,1,1,4,4,1,1,1,2,1,1,2,1,2,1,1,1,1],
+    [0,0,0,1,2,1,2,1,1,2,2,2,2,0,0,2,2,2,2,1,1,2,1,2,1,0,0,0],
+    [5,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1,0,0,5],
+    [0,0,0,1,2,1,2,1,1,2,2,2,2,0,0,2,2,2,2,1,1,2,1,2,1,0,0,0],
+    [1,1,1,1,2,1,2,1,1,2,1,1,1,1,1,1,1,1,2,1,1,2,1,2,1,1,1,1],
+    [1,2,2,2,2,1,2,2,2,2,2,2,2,0,0,2,2,2,2,2,2,2,1,2,2,2,2,1],
+    [1,2,1,1,1,1,2,1,1,1,1,1,1,0,0,1,1,1,1,1,1,2,1,1,1,1,2,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,0,0,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,2,1],
+    [1,3,2,2,2,2,2,1,1,2,2,2,2,0,0,2,2,2,2,1,1,2,2,2,2,2,3,1],
+    [1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,2,2,2,1,2,2,2,2,2,2,2,2,1,2,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,2,1,1,1,1,1,1,1,2,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  ];
+  
+  // Mapa Arena - Centro abierto para batallas intensas
+  static const List<List<int>> _arenaMap = [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1],
+    [1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,1,1,3,1],
+    [1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,0,0,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,0,0,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,2,1],
+    [1,2,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,2,1],
+    [1,2,2,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,1,1,1,2,2,2,2,1,1,2,2,2,2,1,1,1,1,1,1,1,1,1],
+    [0,0,0,0,0,0,0,0,0,2,2,2,2,4,4,2,2,2,2,0,0,0,0,0,0,0,0,0],
+    [1,1,1,1,1,1,1,1,1,2,2,2,2,1,1,2,2,2,2,1,1,1,1,1,1,1,1,1],
+    [5,0,0,0,0,0,2,2,2,2,2,2,2,0,0,2,2,2,2,2,2,2,0,0,0,0,0,5],
+    [1,1,1,1,1,1,1,1,1,2,2,2,2,1,1,2,2,2,2,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,2,1],
+    [1,2,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,2,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,0,0,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,0,0,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1],
+    [1,3,1,1,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,1,1,3,1],
+    [1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  ];
+  
+  // Mapa Velocidad - Pasillos largos para juego rápido
+  static const List<List<int>> _speedMap = [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1],
+    [1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,3,1],
+    [1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,1,1,1,1,2,1],
+    [1,2,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,2,1],
+    [1,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [0,0,0,0,0,0,2,2,2,2,2,2,2,4,4,2,2,2,2,2,2,2,0,0,0,0,0,0],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [5,0,0,0,0,0,2,2,2,2,2,2,2,0,0,2,2,2,2,2,2,2,0,0,0,0,0,5],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,2,1],
+    [1,2,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,1,1,1,1,2,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1],
+    [1,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,3,1],
+    [1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  ];
 }
